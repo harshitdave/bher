@@ -1,4 +1,4 @@
-#!r6rs
+#lang racket
 
 ;; get filename from command line
 ;; read source code from file
@@ -6,21 +6,14 @@
 ;; call compile on code + external-defs code
 ;; write to filename-church.sc
 
-(import (rnrs)
-	(scheme-tools srfi-compat :1)
-	(church readable-scheme)
-        (church compiler)
-        ;(only (vicare) pretty-print)
-        )
-
 (define (read-source pathname)
- (call-with-input-file pathname
-  (lambda (port)
-   (let loop ((forms '()))
-    (let ((form (read port)))
-     (if (eof-object? form)
-	 (reverse forms)
-	 (loop (cons form forms))))))))
+  (call-with-input-file pathname
+    (lambda (port)
+      (let loop ((forms '()))
+        (let ((form (read port)))
+          (if (eof-object? form)
+              (reverse forms)
+              (loop (cons form forms))))))))
 
 (define (write-object objects pathname pretty)
   (call-with-output-file
@@ -44,12 +37,12 @@
         [out (second args)]
         [ext (third args)]
         [pretty (string->bool (fourth args))])
-  (values in out ext pretty)))
+    (values in out ext pretty)))
 
-(let*-values ([(in out ext pretty) (parse-args (cdr (command-line)))]
-              [(ext-source) (if (empty-string? ext) '() (read-source ext))])
-  (write-object
-   (compile (read-source in)
-            ext-source)
-   out
-   pretty))
+(define (main in out ext pretty)
+  (let ([ext-source (if (empty-string? ext) '() (read-source ext))])
+    (write-object
+     (compile (read-source in)
+	      ext-source)
+     out
+     pretty)))
