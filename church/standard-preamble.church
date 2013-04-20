@@ -322,5 +322,5 @@
 
 
 ;;FIXME!! implement no-proposals or singleton constraint detection to deprecate it...
-(define (no-proposals x) (begin (display "warning: no-proposals not implemented.\n")
+(define (no-proposals x) (begin (display "\"warning: no-proposals not implemented.\\n\"")
                                 x))

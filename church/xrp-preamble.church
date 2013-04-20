@@ -215,7 +215,7 @@
                                             (table-index (list-index (lambda (c) (eq? value (first c))) count-map)))
                                        (if (eq? false table-index)
                                            ;;this value not found, can't decr it:
-                                           (error table-index "can't decr a value from CRP that doesn't label any table!")
+                                           (error table-index "\"can't decr a value from CRP that doesn't label any table!\"")
                                            ;;this value is an existing table:
                                            (let* ((table-count (rest (list-ref count-map table-index)))
                                                   (new-table-count (- table-count 1))

@@ -1,4 +1,4 @@
-#!r6rs
+#lang racket
 
 ;; authors: noah goodman
 
@@ -8,69 +8,70 @@
 
 ;;external dependencies:  compiler: srfi 1.  runtime: gensym, gsl as bound in math-env, srfi 1.
 
-(library
- (church compiler)
+(provide compile)
 
- (export compile)
+(require
+ (only-in "readable-scheme.rkt" 
+          tagged-list? repeat)
+ (only-in "desugar.rkt" de-sugar-all)
+ (only-in "header.rkt" generate-header)
+ ;(scheme-tools srfi-compat :1) ; lists
+ ;(church readable-scheme)
+ ;(church desugar)
+ ;(church header)
+ )
 
- (import (rnrs)
-         (scheme-tools srfi-compat :1) ; lists
-         (church readable-scheme)
-         (church desugar)
-         (church header)
-         )
+(define *storethreading* false)
+(define *lazy* true) ;;at the moment this just turns on forcing, in order to support lazified code. explicitly lazify an expression to make it lazy.
 
- (define *storethreading* false)
- (define *lazy* true) ;;at the moment this just turns on forcing, in order to support lazified code. explicitly lazify an expression to make it lazy.
- 
- (define (compile top-list external-defs)
-   (let* ((church-sexpr  `(begin
-                            (load "standard-preamble.church")
-                            (load "xrp-preamble.church")
-                            (load "mcmc-preamble.church")
-                            ,@top-list))
-          (ds-sexpr (de-sugar-all church-sexpr))
-          (ds-sexpr (if *lazy*
-                        (add-forcing ds-sexpr) ;;to make everything lazy, wrap church-sexpr with (lazify ..) before desugaring.
-                        ds-sexpr))
-          (scexpr (if *storethreading*
-                      (storethreading (addressing ds-sexpr))
-                      (addressing ds-sexpr))))
-     `( ,@(generate-header *storethreading* *lazy* (free-variables scexpr '()) external-defs)
-        (define (church-main address store) ,scexpr))))
- 
- (define symbol-index 0)
- (define (next-addr)
-   (set! symbol-index (+ 1 symbol-index))
-   (string->symbol (string-append "a" (number->string symbol-index))))
+(define (compile top-list external-defs)
+  (let* ((church-sexpr  `(begin
+                           (load "standard-preamble.church")
+                           (load "xrp-preamble.church")
+                           (load "mcmc-preamble.church")
+                           ,@top-list))
+         (ds-sexpr (de-sugar-all church-sexpr))
+         (ds-sexpr (if *lazy*
+                       (add-forcing ds-sexpr) ;;to make everything lazy, wrap church-sexpr with (lazify ..) before desugaring.
+                       ds-sexpr))
+         (scexpr (if *storethreading*
+                     (storethreading (addressing ds-sexpr))
+                     (addressing ds-sexpr))))
+    `( ,@(generate-header *storethreading* *lazy* (free-variables scexpr '()) external-defs)
+       (define (church-main address store) ,scexpr))))
 
- (define (mem? sexpr) (tagged-list? sexpr 'mem))
- (define (lambda? exp) (tagged-list? exp 'lambda))
- (define (lambda-parameters exp) (cadr exp))
- (define (lambda-body exp) (caddr exp))
- (define (quoted? exp) (tagged-list? exp 'quote))
- (define (begin? exp) (tagged-list? exp 'begin))
- (define (definition? exp) (tagged-list? exp 'define))
- (define (if? exp) (tagged-list? exp 'if))
- (define (application? exp) (pair? exp))
- (define (letrec? exp) (tagged-list? exp 'letrec))
+(define symbol-index 0)
+(define (next-addr)
+  (set! symbol-index (+ 1 symbol-index))
+  (string->symbol (string-append "a" (number->string symbol-index))))
 
- (define *qobi?* #f)
- (define (set-qobi!) (set! *qobi?* #t))
- 
- (define (church-rename variable)
-   (string->symbol (string-append "church-" (symbol->string variable))))
+(define (mem? sexpr) (tagged-list? sexpr 'mem))
+(define (lambda? exp) (tagged-list? exp 'lambda))
+(define (lambda-parameters exp) (cadr exp))
+(define (lambda-body exp) (caddr exp))
+(define (quoted? exp) (tagged-list? exp 'quote))
+(define (begin? exp) (tagged-list? exp 'begin))
+(define (definition? exp) (tagged-list? exp 'define))
+(define (if? exp) (tagged-list? exp 'if))
+(define (application? exp) (pair? exp))
+(define (letrec? exp) (tagged-list? exp 'letrec))
 
- (define (church-rename-parameters parameters)
+(define *qobi?* #f)
+(define (set-qobi!) (set! *qobi?* #t))
+
+(define (church-rename variable)
+  (string->symbol (string-append "church-" (symbol->string variable))))
+
+(define (church-rename-parameters parameters)
   (cond ((pair? parameters)
-	 (cons (church-rename (car parameters))
-	       (church-rename-parameters (cdr parameters))))
-	((null? parameters) '())
-	((symbol? parameters) (church-rename parameters))
-	(else (error parameters "This shouldn't happen"))))
+         (cons (church-rename (car parameters))
+               (church-rename-parameters (cdr parameters))))
+        ((null? parameters) '())
+        ((symbol? parameters) (church-rename parameters))
+        (else (error parameters "This shouldn't happen"))))
 
- (define (addressing sexpr)
-   (cond
+(define (addressing sexpr)
+  (cond
     ((begin? sexpr) `(begin ,@(map addressing (rest sexpr))))
     ((definition? sexpr) (error "addressing" "defines should have all been de-sugared!"))
     ((letrec? sexpr) `(letrec ,(map (lambda (binding) (list (church-rename (first binding)) (addressing (second binding)))) (second sexpr))
@@ -93,19 +94,19 @@
     ((symbol? sexpr) (church-rename sexpr))
     (else sexpr) )) 
 
- ;;this happens after addressing, so store is already passed 'down' the calls. must do a-normal form conversion and return store.
- ;;assumes that every application has address and store as first two operand exprs, and that every lambda takes these.
- ;;FIXME!! the generated letrec doesn't work right (inits are evaluated with symbols bound to void).
- (define (storethreading sexpr)
-    (cond
-     ((begin? sexpr) (storethreading (last sexpr))) ;;FIXME!!! don't drop non-final exprs...
-     ((letrec? sexpr) 
-      (let ((ret-symbols (repeat (+ 1 (length (second sexpr))) gensym)))
-        `(letrec ((,(first ret-symbols) (list 'foo store))
-                   ,@(apply append (map (lambda (rs prev-rs binding) `((,rs (let ((store (second ,prev-rs))) ,(storethreading (second binding))))
-                                                                       (,(first binding) (first ,rs))))
-                                        (rest ret-symbols) (drop-right ret-symbols 1) (second sexpr))))
-                  (let ((store (second ,(last ret-symbols)))) ,(storethreading (third sexpr))))))
+;;this happens after addressing, so store is already passed 'down' the calls. must do a-normal form conversion and return store.
+;;assumes that every application has address and store as first two operand exprs, and that every lambda takes these.
+;;FIXME!! the generated letrec doesn't work right (inits are evaluated with symbols bound to void).
+(define (storethreading sexpr)
+  (cond
+    ((begin? sexpr) (storethreading (last sexpr))) ;;FIXME!!! don't drop non-final exprs...
+    ((letrec? sexpr) 
+     (let ((ret-symbols (repeat (+ 1 (length (second sexpr))) gensym)))
+       `(letrec ((,(first ret-symbols) (list 'foo store))
+                 ,@(apply append (map (lambda (rs prev-rs binding) `((,rs (let ((store (second ,prev-rs))) ,(storethreading (second binding))))
+                                                                     (,(first binding) (first ,rs))))
+                                      (rest ret-symbols) (drop-right ret-symbols 1) (second sexpr))))
+          (let ((store (second ,(last ret-symbols)))) ,(storethreading (third sexpr))))))
     ((quoted? sexpr) `(list ,sexpr store))
     ((lambda? sexpr) `(list ,sexpr store))
     ((if? sexpr) `(let* ((p ,(storethreading (second sexpr)))
@@ -120,8 +121,8 @@
                (store (second ,(first ret-symbols)))
                ,@(apply append
                         (map (lambda (rs vs e) `((,rs ,(storethreading e))
-                                          (,vs (first ,rs))
-                                          (store (second ,rs))))
+                                                 (,vs (first ,rs))
+                                                 (store (second ,rs))))
                              (rest ret-symbols)
                              (rest value-symbols)
                              (drop sexpr 3))))
@@ -129,30 +130,30 @@
     (else `(list ,sexpr store)) ))
 
 
- ;;this is used to find the free variables in a program, which need to be provided by the header. (will also be used by caching...)
- (define (free-variables sexpr bound-vars)
-   (cond
-    ((begin? sexpr) (apply append (map (lambda (e) (free-variables e bound-vars)) (rest sexpr))))
+;;this is used to find the free variables in a program, which need to be provided by the header. (will also be used by caching...)
+(define (free-variables sexpr bound-vars)
+  (cond
+    ((begin? sexpr) (apply append (map (lambda (e) (free-variables e bound-vars)) (cdr sexpr))))
     ((letrec? sexpr)
-     (let ((new-bound (append (map first (second sexpr)) bound-vars)))
-       (apply append (map (lambda (e) (free-variables e new-bound)) (pair (third sexpr) (map second (second sexpr)))))))
+     (let ((new-bound (append (map car (second sexpr)) bound-vars)))
+       (apply append (map (lambda (e) (free-variables e new-bound)) (cons (third sexpr) (map second (second sexpr)))))))
     ;;((self-evaluating? sexpr) (make-syntax 'self-evaluating sugared-sexpr sexpr) )
     ((quoted? sexpr) '())
     ((lambda? sexpr) (free-variables (lambda-body sexpr) (let loop ((params (lambda-parameters sexpr)))
                                                            (if (null? params)
                                                                bound-vars
                                                                (if (pair? params)
-                                                                   (pair (first params) (loop (rest params)))
-                                                                   (pair params bound-vars))))))
+                                                                   (cons (car params) (loop (cdr params)))
+                                                                   (cons params bound-vars))))))
     ((if? sexpr)  (apply append (map (lambda (e) (free-variables e bound-vars)) (rest sexpr))))
     ((application? sexpr) (apply append (map (lambda (e) (free-variables e bound-vars)) sexpr)))
     ((symbol? sexpr) (if (memq sexpr bound-vars) '() (list sexpr)))
     (else '()) ))
 
- 
- ;;this happens after lazifying, it adds force to appropriate places (must also add forcing to primitives via header).
- (define (add-forcing sexpr)
-   (cond
+
+;;this happens after lazifying, it adds force to appropriate places (must also add forcing to primitives via header).
+(define (add-forcing sexpr)
+  (cond
     ((begin? sexpr) `(begin ,@(map (lambda (e) `(force ,(add-forcing e))) (drop-right (rest sexpr) 1)) ,(add-forcing (last sexpr))))
     ((letrec? sexpr) `(letrec ,(map (lambda (binding) (list (first binding) (add-forcing (second binding))))
                                     (second sexpr))
@@ -165,6 +166,4 @@
     (else sexpr) ))
 
 
-
- )
 

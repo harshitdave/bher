@@ -25,8 +25,8 @@
 (define include-paths  (list "./" "include/" "./church/")) ;;FIXME: include scheme search-path?
 ;;(append (list "./" "include/") (map (lambda (search-path) (string-append search-path "/include/")) (search-paths))))
 
-; goes through a list of library paths and opens
-; the first one it finds
+					; goes through a list of library paths and opens
+					; the first one it finds
 (define (open-included-file filename)
   (define (loop-through-paths path-list)
     (if (null? path-list)
@@ -57,14 +57,14 @@
   (let loop ((expr expr)
              (pass 0))
     (let ((new-expr (try expr (filter (lambda (s) (or (null? (times-to-try s)) (< pass (first (times-to-try s))))) sugar-registry))))
-      ;(display expr)(display "   :   ")(display new-expr)(newline)
+					;(display expr)(display "   :   ")(display new-expr)(newline)
       (if (eq? new-expr unchanged)
           expr
           (loop new-expr (+ pass 1)) ))))
 
 (define (de-sugar-all sexpr)
   (let ((new-sexpr (de-sugar sexpr)))
-    ;(display sexpr)(display "   :   ")(display new-sexpr)(newline)
+					;(display sexpr)(display "   :   ")(display new-sexpr)(newline)
     (if (list? new-sexpr)
         (map de-sugar-all new-sexpr)
         new-sexpr)))
@@ -84,9 +84,9 @@
       `(begin ,@exprs)))
 
 ;; (begin ...) is now a special form!
-;(define (desugar-begin expr)
-;  (last expr))
-;(register-sugar begin? desugar-begin)
+					;;(define (desugar-begin expr)
+					;;  (last expr))
+					;;(register-sugar begin? desugar-begin)
 
 ;; (let (var-bindings) expr1 ... exprN)
 (define (let? expr) (and (tagged-list? expr 'let) (list? (second expr))))
@@ -131,8 +131,8 @@
         (value-exprs (drop expr 2)) )
     `(let ((,key-symbol ,key-expr))
        (cond ,@(map (lambda (value-expr)
-                      (let ((values (first value-expr))
-                            (val-expr (rest value-expr)) )
+                      (let ((values (car value-expr))
+                            (val-expr (cdr value-expr)) )
                         (cond ((list? values)
                                `((any (list ,@(map (lambda (val) `(equal? ,key-symbol ,val)) values) ))
                                  ,@val-expr ) )
@@ -147,12 +147,12 @@
   (let loop ((conditions (rest expr)))
     (if (null? conditions)
         '(void)
-        (let* ((condition (first conditions))
-               (test (first condition)))
+        (let* ((condition (car conditions))
+               (test (car condition)))
           (if (equal? test 'else)
-              (if (not (null? (rest conditions)))
+              (if (not (null? (cdr conditions)))
                   (error expr "else clause in cond expression must be last.")
-                  (begin-wrap (rest condition)) )
+                  (begin-wrap (cdr condition)) )
               `(if ,test
                    ,(begin-wrap (rest condition))
                    ,(loop (rest conditions)) ) )))))
@@ -169,9 +169,9 @@
 (define (define-fn? expr) (and (tagged-list? expr 'define) (not (symbol? (second expr)))))
 (define (desugar-define-fn expr)
   (if (define-fn? expr)
-      (let ((def-var (first (second expr)))
-            (def-params (rest (second expr)))
-            (def-body (rest (rest expr))))
+      (let ((def-var (car (second expr)))
+            (def-params (cdr (second expr)))
+            (def-body (cdr (rest expr))))
         `(define ,def-var (lambda ,def-params ,@def-body)))
       expr))
 
@@ -203,7 +203,7 @@
     (and (tagged-list? expr query-name)
          (>= (length (rest expr)) 2))) ;;make sure not to try de-sugaring the definition of the query -- queries have at least two subexprs.
   (define (desugar-query expr)
-    ;(display expr) (newline)
+					;(display expr) (newline)
     (let*-values ([ (control-part defs) (break (lambda (subexpr) (tagged-list? subexpr 'define)) (drop-right expr 2))]
                   [ (control-args) (rest control-part)]
                   [ (query-exp cond-exp) (apply values (take-right expr 2))])
@@ -247,26 +247,26 @@
 ;;lazify adds delay to an expression. make sure that the expression is fully-desugarred first!
 (define (lazify? expr) (tagged-list? expr 'lazify))
 (define (desugar-lazify expr)
-  ;(display (de-sugar-all (second expr)))
-  ;(newline)
-  ;(display (make-lazy (de-sugar-all (second expr))))
-  ;(newline)
-  ;(make-lazy (de-sugar-all (second expr))))
+					;(display (de-sugar-all (second expr)))
+					;(newline)
+					;(display (make-lazy (de-sugar-all (second expr))))
+					;(newline)
+					;(make-lazy (de-sugar-all (second expr))))
   (make-lazy (second expr)))
 (define (make-lazy sexpr)
   (cond
-    ((or (begin? sexpr) (mem? sexpr)) (map make-lazy sexpr))
-    ((quoted? sexpr) sexpr)
-    ((letrec? sexpr) `(letrec ,(map (lambda (binding) (list (first binding) (delay-expr (second binding))))
-                                    (second sexpr))
-                        ,(make-lazy (third sexpr))))
-    ((definition? sexpr) `(define ,(second sexpr) ,(delay-expr (third sexpr))))
-    ((lambda? sexpr) `(lambda ,(lambda-parameters sexpr) ,(make-lazy (lambda-body sexpr)))) ;;delay body?
-    ((if? sexpr) `(if ,(make-lazy (second sexpr)) ,(delay-expr (third sexpr)) ,(delay-expr (fourth sexpr))))
-    ((application? sexpr) `(,(make-lazy (first sexpr)) ,@(map delay-expr (rest sexpr))))
-    (else sexpr) ))
+   ((or (begin? sexpr) (mem? sexpr)) (map make-lazy sexpr))
+   ((quoted? sexpr) sexpr)
+   ((letrec? sexpr) `(letrec ,(map (lambda (binding) (list (car binding) (delay-expr (second binding))))
+				   (second sexpr))
+		       ,(make-lazy (third sexpr))))
+   ((definition? sexpr) `(define ,(second sexpr) ,(delay-expr (third sexpr))))
+   ((lambda? sexpr) `(lambda ,(lambda-parameters sexpr) ,(make-lazy (lambda-body sexpr)))) ;;delay body?
+   ((if? sexpr) `(if ,(make-lazy (second sexpr)) ,(delay-expr (third sexpr)) ,(delay-expr (fourth sexpr))))
+   ((application? sexpr) `(,(make-lazy (car sexpr)) ,@(map delay-expr (rest sexpr))))
+   (else sexpr) ))
 (define (delay-expr sexpr)
-  (if (or (lambda? sexpr) (and (mem? sexpr) (lambda? (first sexpr))))
+  (if (or (lambda? sexpr) (and (mem? sexpr) (lambda? (car sexpr))))
       (make-lazy sexpr)
       `(list 'delayed (mem (lambda () ,(make-lazy sexpr))))))
 
@@ -300,21 +300,21 @@
 
 
 
-; @form (let ((var val) ...) expr ...)
-; @desc
-; Let binds variables in the scope of the body of the let.
-; @param assignments An expression '((var val) ...)
-; @param exprs Body expressions that are evaluated within the environment where variables are assigned.
-; @return the result of evaluating the last body expr
+					; @form (let ((var val) ...) expr ...)
+					; @desc
+					; Let binds variables in the scope of the body of the let.
+					; @param assignments An expression '((var val) ...)
+					; @param exprs Body expressions that are evaluated within the environment where variables are assigned.
+					; @return the result of evaluating the last body expr
 (register-sugar! let? let->lambda)
 
-; @form (let* ((var val) ...) expr ...)
-; @desc
-; Let* binds variables in the scope of the body of the let.
-; Each assignment has access to the variables bound earlier on in the same let*.
-; @param assignments An expression '((var val) ...)
-; @param exprs Body expressions that are evaluated within the environment where variables are assigned.
-; @return the result of evaluating the last body expr
+					; @form (let* ((var val) ...) expr ...)
+					; @desc
+					; Let* binds variables in the scope of the body of the let.
+					; Each assignment has access to the variables bound earlier on in the same let*.
+					; @param assignments An expression '((var val) ...)
+					; @param exprs Body expressions that are evaluated within the environment where variables are assigned.
+					; @return the result of evaluating the last body expr
 (register-sugar! let*? desugar-let*)
 
 (register-sugar! named-let? named-let->letrec)
@@ -332,8 +332,8 @@
 (register-query-sugar 'gradient-ascent)
 (register-query-sugar 'hmc-query)
 (register-query-sugar 'counterfactual-query) 
-;(register-query-sugar 'primitive-laplace-mh-query 'laplace-mh-query)
-;(register-query-sugar 'primitive-gradient-query 'gradient-query)
+					;(register-query-sugar 'primitive-laplace-mh-query 'laplace-mh-query)
+					;(register-query-sugar 'primitive-gradient-query 'gradient-query)
 
 (register-sugar! psmc-query? desugar-psmc-query 1)
 (register-sugar! mh-query/annealed-init? desugar-mh-query/annealed-init 1)
@@ -344,4 +344,4 @@
 (register-sugar! fragment-lambda? desugar-fragment-lambda)
 (register-sugar! lazy-lambda? desugar-lazy-lambda)
 (register-sugar! lazify? desugar-lazify)
-;(register-sugar! fragmentize? desugar-fragmentize)
+					;(register-sugar! fragmentize? desugar-fragmentize)

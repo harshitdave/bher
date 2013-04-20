@@ -63,21 +63,21 @@
       (if (= -inf.0 (mcmc-state->score mcmc-state))
           (begin
             (when verbose-init
-                  (display "annealing-initializer: failed, restarting at top ...\n"))
+                  (display "\"annealing-initializer: failed, restarting at top ...\\n\""))
             (annealing-initializer rej-steps temps:low->high temps->nfqp rejuv-kernel-builder))
           (if (null? temps)
               (begin
                 (when verbose-init
-                      (display "annealing-initializer: succeeded!\n"))
+                      (display "\"annealing-initializer: succeeded!\\n\""))
                 mcmc-state)
               (begin
                 (when verbose-init
                       (for-each display
-                                (list "annealing-initializer:\n"
-                                      "  temps remaining: " (length temps)
-                                      "\n  current temp: " (first temps)
+                                (list "\"annealing-initializer:\\n\""
+                                      "\"  temps remaining: \"" (length temps)
+                                      "\"\\n  current temp: \"" (first temps)
                                       ;"\n  current val: " (untapify (mcmc-state->query-value mcmc-state))
-                                      "\n")))
+                                      "\"\\n\"")))
                 (let* ([nfqp (apply temps->nfqp (first temps))]
                        [rescored-state (update->state (counterfactual-update mcmc-state nfqp))]
                        [kernel (rejuv-kernel-builder nfqp)]
@@ -131,9 +131,9 @@
 
 (define (with-times proc)
   (begin
-    (for-each display (list "start: " (current-date) "\n"))
+    (for-each display (list "\"start: \"" (current-date) "\"\\n\""))
     (let ([return-value (proc)])
-      (for-each display (list "done: " (current-date) "\n"))
+      (for-each display (list "\"done: \"" (current-date) "\"\\n\""))
       return-value)))
 
 ;;;queries
@@ -199,7 +199,7 @@
     (if (null? temps)
         (reverse trail)
         (let ((newstate ((make-gradient-step step-size (apply temps->nfqp (first temps))) state)))
-          (display "ascent loop, temp=")(display (first temps));(display " score=")(display (untapify (mcmc-state->score newstate)))
+          (display "\"ascent loop, temp=\"")(display (first temps));(display " score=")(display (untapify (mcmc-state->score newstate)))
           (newline)
           (loop newstate
                 (pair (mcmc-state->query-value newstate) trail)
@@ -403,10 +403,10 @@
                                                                mcmc-state->score)))
            (new3-population (map kernel new2-population)))
 
-      (begin (map (lambda (x y) (begin (display "  ")(display x)(display "  ")(display y)(display "\n")))
+      (begin (map (lambda (x y) (begin (display "\"  \"")(display x)(display "\"  \"")(display y)(display "\"\\n\"")))
                   (map mcmc-state->query-value new3-population)
                   (map mcmc-state->score new3-population))
-             (display "\n")
+             (display "\"\\n\"")
       ;;loop if there are any temps left.
       (if (or collapse? (null? (rest temps)))
           new3-population

@@ -1,5 +1,10 @@
 #lang racket
 
+(provide main)
+
+(require 
+ (only-in  "compiler.rkt" compile))
+
 ;; get filename from command line
 ;; read source code from file
 ;; read source code from external-defs file
@@ -16,11 +21,10 @@
               (loop (cons form forms))))))))
 
 (define (write-object objects pathname pretty)
-  (call-with-output-file
-      pathname
+  (call-with-output-file pathname
     (lambda (port)
       (for-each
-       (lambda (o) ((if pretty pretty-print write) o port))
+       (lambda (o) ((if pretty pretty-display write) o port))
        objects))))
 
 (define (empty-string? s)
@@ -41,8 +45,4 @@
 
 (define (main in out ext pretty)
   (let ([ext-source (if (empty-string? ext) '() (read-source ext))])
-    (write-object
-     (compile (read-source in)
-	      ext-source)
-     out
-     pretty)))
+    (write-object (compile (read-source in) ext-source) out pretty)))
