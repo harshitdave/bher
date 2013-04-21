@@ -176,18 +176,29 @@
       expr))
 
 ;;load sugar.
-(define (seq-with-load? expr) (and (list? expr)
-                                   (fold (lambda (subexpr accum) (or (tagged-list? subexpr 'load) accum)) false expr)))
+(define (seq-with-load? expr) 
+  (and (list? expr)
+       (fold (lambda (subexpr accum) (or (tagged-list? subexpr 'load)
+					 accum)) false expr)))
+
 (define (expand-loads expr)
-  (apply append (map (lambda (subexpr) (if (load? subexpr) (file->list (open-included-file (second subexpr))) (list subexpr))) expr)))
+  (apply append (map (lambda (subexpr) 
+		       (if (load? subexpr) 
+			   (file->list (open-included-file (second subexpr))) 
+			   (list subexpr))) 
+		     expr)))
+
 (define (file->list filehandle)
   (let ((next (read filehandle)))
     (if (eof-object? next) '() (cons next (file->list filehandle)))))
-(define (load? expr) (tagged-list? expr 'load))
+
+(define (load? expr) 
+  (tagged-list? expr 'load))
 
 ;;we desugar (begin .. define ..) into letrec for this implementation.
 (define (begin-defines? sexpr)
   (and (tagged-list? sexpr 'begin) (not (null? (filter (lambda (e) (tagged-list? e 'define)) sexpr)))))
+
 (define (desugar-begin-defines sexpr)
   (let* ((defines (map desugar-define-fn (filter (lambda (e) (tagged-list? e 'define)) (rest sexpr))));;de-sugar here is to make defines be in standard form.
          (non-defines (filter (lambda (e) (not (tagged-list? e 'define))) (rest sexpr))))
@@ -199,9 +210,11 @@
 ;; ... query-expr condition-expr)
 ;;note: primitive-name shouldn't be the same as query-name, because otherwise desugarring doesn't know when to stop.
 (define (register-query-sugar query-name)
+
   (define (query? expr)
     (and (tagged-list? expr query-name)
          (>= (length (rest expr)) 2))) ;;make sure not to try de-sugaring the definition of the query -- queries have at least two subexprs.
+  
   (define (desugar-query expr)
 					;(display expr) (newline)
     (let*-values ([ (control-part defs) (break (lambda (subexpr) (tagged-list? subexpr 'define)) (drop-right expr 2))]
@@ -215,6 +228,7 @@
 (define (tempered-query? query-name expr)
   (and (tagged-list? expr query-name)
        (>= (length (rest expr)) 2))) ;;make sure not to try de-sugaring the definition of the query -- queries have at least two subexprs.
+
 (define (desugar-tempered-query query-name expr)
   (let*-values ([(control-part defs) (break (lambda (subexpr) (tagged-list? subexpr 'define)) (drop-right expr 2))]
                 [(temp-args) (second control-part)]
@@ -225,6 +239,7 @@
 
 (define (psmc-query? expr)
   (tempered-query? 'psmc-query expr))
+
 (define (desugar-psmc-query expr)
   (desugar-tempered-query 'psmc-query expr))
 
